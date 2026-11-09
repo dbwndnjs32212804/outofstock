@@ -90,8 +90,10 @@ def extract(installer: Path, dest: Path) -> int:
             name = member.name
             if not member.isfile() or name.startswith("/") or ".." in Path(name).parts:
                 raise ChangeError(f"설치본에 허용되지 않는 경로: {name}", 400, "unsafe_path")
-        kw = {"filter": "data"} if hasattr(tarfile, "data_filter") else {}      # 3.12+/보안 패치판: 링크·장치·권한 비트 거부
-        tar.extractall(dest, **kw)
+        if hasattr(tarfile, "data_filter"):      # 3.12+/보안 패치판: 링크·장치·권한 비트 거부(bandit B202 가 읽을 수 있게 직접 적는다)
+            tar.extractall(dest, filter="data")
+        else:                                    # 옛 파이썬 — 위에서 모든 항목을 검사했다(일반 파일·상대 경로만)
+            tar.extractall(dest, members=tar.getmembers())
         n = sum(1 for m in tar.getmembers() if m.isfile())
     return n
 

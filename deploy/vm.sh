@@ -571,7 +571,7 @@ db_tune() {
     fi
     ensure_pg_stat_statements
 }
-wait_pg() { local i; for i in $(seq 1 30); do as_postgres psql -tAc "SELECT 1" >/dev/null 2>&1 && return 0; sleep 1; done; return 1; }
+wait_pg() { local _; for _ in $(seq 1 30); do as_postgres psql -tAc "SELECT 1" >/dev/null 2>&1 && return 0; sleep 1; done; return 1; }
 ensure_pg_stat_statements() {    # 느린 쿼리 통계 — 모듈이 적재된 뒤에만(재시작 전이면 다음 update 에서)
     local db; db="$(url_part "$(db_url)" database 2>/dev/null || echo outofstock)"
     if as_postgres psql -tAc "SHOW shared_preload_libraries" | grep -q pg_stat_statements; then
@@ -630,17 +630,17 @@ ensure_egress_proxy() {
         $SUDO squid -k parse -f "$tmp" 2>&1 | grep -iE 'error|fatal|bungled' | head -5 >&2 || true
         rm -f "$tmp"; die "squid 설정 검사 실패 — 운영 중인 설정은 그대로"
     fi
-    local changed=0
+    local updated=0                                          # (db_tune 의 배열 changed 와 이름을 나눈다 — shellcheck SC2178)
     if ! $SUDO cmp -s "$tmp" "$SQUID_CONF"; then
         if [ -f "$SQUID_CONF" ] && [ ! -f "$SQUID_CONF.dist" ] && ! grep -qs 'OUTOFSTOCK egress' "$SQUID_CONF"; then
             $SUDO cp -p "$SQUID_CONF" "$SQUID_CONF.dist"     # 배포판 기본 설정 보관(한 번만)
         fi
         $SUDO install -m 644 "$tmp" "$SQUID_CONF"
-        changed=1
+        updated=1
     fi
     rm -f "$tmp"
     $SUDO systemctl enable squid >/dev/null 2>&1 || true
-    if [ "$changed" = 1 ] || ! systemctl is-active --quiet squid; then
+    if [ "$updated" = 1 ] || ! systemctl is-active --quiet squid; then
         $SUDO systemctl restart squid || die "squid 기동 실패 — sudo journalctl -u squid -n 30"
     fi
     local _ code=""
@@ -650,7 +650,7 @@ ensure_egress_proxy() {
         sleep 1
     done
     [ "$code" = "403" ] || die "egress 프록시 확인 실패(허용 목록 밖 요청의 응답 $code, 기대 403) — sudo journalctl -u squid -n 30"
-    ok "egress 프록시 동작 — 허용 목록 $(grep -c '' <(run_app tools/egress.py)) 개 호스트만, 그 밖은 거부($([ "$changed" = 1 ] && echo '설정 갱신' || echo '변경 없음'))"
+    ok "egress 프록시 동작 — 허용 목록 $(grep -c '' <(run_app tools/egress.py)) 개 호스트만, 그 밖은 거부($([ "$updated" = 1 ] && echo '설정 갱신' || echo '변경 없음'))"
 }
 
 cmd_units() {

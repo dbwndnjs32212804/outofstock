@@ -24,7 +24,9 @@ FROM ${PYTHON_IMAGE} AS runtime
 ENV TZ=Asia/Seoul PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PATH=/opt/venv/bin:$PATH HOME=/tmp
 RUN groupadd --system --gid 10001 oos \
  && useradd --system --uid 10001 --gid oos --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin oos \
- && install -d -o oos -g oos -m 0750 /var/lib/oos
+ && install -d -o oos -g oos -m 0750 /var/lib/oos \
+ && python -m pip uninstall -y -q pip \
+ && rm -rf /usr/local/lib/python3*/ensurepip            # 베이스 이미지의 pip 도 지운다 — 가상환경 것만 지우면 PATH 에 남는다
 COPY --from=build /opt/venv /opt/venv
 WORKDIR /app
 COPY . .

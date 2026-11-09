@@ -57,17 +57,18 @@ jobs:
     services:
       postgres:
         image: postgres:16
-        env: {POSTGRES_USER: oos, POSTGRES_PASSWORD: oos, POSTGRES_DB: outofstock_test}
+        env: {POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres, POSTGRES_DB: postgres}
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U oos -d outofstock_test"
+          --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 20
     env:
       TZ: ${{ matrix.tz }}
+      # 시험 계정은 슈퍼유저가 아니다 — 슈퍼유저는 행 수준 보안(RLS)을 늘 건너뛰어 행 격리 시험이 거짓으로 실패한다
       TEST_DATABASE_URL: postgresql+psycopg://oos:oos@localhost:5432/outofstock_test
       DATABASE_URL: postgresql+psycopg://oos:oos@localhost:5432/outofstock_test
       # 실제 복원 훈련(tests/test_dr.py) — 격리 DB 를 새로 만들 수 있는 계정(서비스 컨테이너의 관리자)
-      DR_TEST_ADMIN_URL: postgresql+psycopg://oos:oos@localhost:5432/postgres
+      DR_TEST_ADMIN_URL: postgresql+psycopg://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with: {persist-credentials: false}
@@ -75,13 +76,22 @@ jobs:
         with: {python-version: "${{ env.PY }}", cache: pip, cache-dependency-path: requirements.lock}
       - name: pg_dump·pg_restore(서버와 같은 16) · age(백업 암호화)
         run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends postgresql-client-16 age
+      - name: 시험 계정 oos(슈퍼유저 아님)와 시험 DB
+        env: {PGPASSWORD: postgres}
+        run: >-
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1
+          -c "CREATE ROLE oos LOGIN PASSWORD 'oos' NOSUPERUSER NOCREATEDB NOBYPASSRLS"
+          -c "CREATE DATABASE outofstock_test OWNER oos"
       - name: 의존성(운영과 같은 해시 고정 목록) + 시험 도구
         run: |
           pip install --require-hashes --no-deps -r requirements.lock
           pip install "pytest>=8,<10"
           pip check
       - name: pytest (${{ matrix.tz }})
-        run: python -m pytest -q -p no:cacheprovider -rfs --durations=10
+        run: python -m pytest -q -p no:cacheprovider -rfs --durations=10 --junitxml=pytest-report.xml
+      - name: 실패한 시험을 주석으로(로그를 열지 않아도 커밋 화면·API 에서 보이게)
+        if: failure()
+        run: python tools/ci_annotate.py junit pytest-report.xml
 
   least-privilege:
     runs-on: ubuntu-24.04
@@ -114,7 +124,10 @@ jobs:
           -v owner_pw="'owner_ci'" -v app_pw="'app_ci'" -v ro_pw="'ro_ci'" -v backup_pw="'backup_ci'"
           -f deploy/sql/roles.sql
       - name: pytest — 앱 계정(oos_app)
-        run: python -m pytest -q -p no:cacheprovider -rfs
+        run: python -m pytest -q -p no:cacheprovider -rfs --junitxml=pytest-report.xml
+      - name: 실패한 시험을 주석으로
+        if: failure()
+        run: python tools/ci_annotate.py junit pytest-report.xml
       - name: 권한 점검(슈퍼유저·DDL·RLS 우회·감사 로그 수정 없음)
         env: {DATABASE_URL: "postgresql+psycopg://oos_app:app_ci@localhost:5432/outofstock_lp"}
         run: python tools/db_roles_check.py --strict
@@ -159,16 +172,24 @@ jobs:
           docker build --target backup -t outofstock/backup:ci .
       - name: 읽기 전용·capability 없음·권한 상승 금지로 기동 → /health
         run: |
-          DB=postgresql+psycopg://oos:oos@127.0.0.1:5432/outofstock
-          docker run --rm --network host -e DATABASE_URL="$DB" outofstock/app:ci python run.py initdb
-          docker run -d --name app --network host --read-only --tmpfs /tmp --cap-drop ALL \
-            --security-opt no-new-privileges -e DATABASE_URL="$DB" outofstock/app:ci
-          for _ in $(seq 1 40); do curl -fsS -o /dev/null http://127.0.0.1:8000/health && break; sleep 2; done
-          curl -fsS http://127.0.0.1:8000/health
-          test "$(docker exec app id -u)" = 10001
-          if docker exec app sh -c 'touch /app/x' 2>/dev/null; then echo "코드 폴더에 쓸 수 있다"; exit 1; fi
-          if docker exec app sh -c 'command -v pip' >/dev/null; then echo "실행 이미지에 pip 가 있다"; exit 1; fi
-          docker run --rm outofstock/backup:ci sh -c 'pg_dump --version && age --version'
+          {
+            DB=postgresql+psycopg://oos:oos@127.0.0.1:5432/outofstock
+            docker run --rm --network host -e DATABASE_URL="$DB" outofstock/app:ci python run.py initdb
+            docker run -d --name app --network host --read-only --tmpfs /tmp --cap-drop ALL \
+              --security-opt no-new-privileges -e DATABASE_URL="$DB" outofstock/app:ci
+            for _ in $(seq 1 40); do curl -fsS -o /dev/null http://127.0.0.1:8000/health && break; sleep 2; done
+            curl -fsS http://127.0.0.1:8000/health
+            test "$(docker exec app id -u)" = 10001
+            if docker exec app sh -c 'touch /app/x' 2>/dev/null; then echo "코드 폴더에 쓸 수 있다"; exit 1; fi
+            if docker exec app sh -c 'command -v pip' >/dev/null; then echo "실행 이미지에 pip 가 있다"; exit 1; fi
+            docker run --rm outofstock/backup:ci sh -c 'pg_dump --version && age --version'
+          } 2>&1 | tee image-step.log
+      - name: 실패 원인을 주석으로(기동 단계 로그·앱 로그)
+        if: failure()
+        run: |
+          docker logs app > app.log 2>&1 || true
+          python3 tools/ci_annotate.py tail image-step.log "이미지 기동 단계 로그"
+          python3 tools/ci_annotate.py tail app.log "앱 컨테이너 로그"
       - name: compose 운영 오버레이 설정 검증(합쳐진 결과 — 필수 비밀번호·망·권한)
         run: |
           cp env.prod.example .env
