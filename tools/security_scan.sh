@@ -4,7 +4,8 @@
 # CI(.github/workflows/ci.yml)의 security 작업도 같은 스크립트를 쓴다.
 set -u
 cd "$(dirname "$0")/.." || exit 1
-PY=${PY:-python3}
+# 파이썬 실행 파일은 SCAN_PY 로 바꾼다 — CI 의 env PY 는 파이썬 '버전'("3.12")이라 그 이름을 쓰면 명령이 아니어서 전부 실패한다
+PY=${SCAN_PY:-python3}
 fail=0
 $PY -m pip_audit --version >/dev/null 2>&1 && $PY -m bandit --version >/dev/null 2>&1 \
   || $PY -m pip install -q "pip-audit>=2.7,<3" "bandit>=1.7,<2" >/dev/null 2>&1 || true
