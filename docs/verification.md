@@ -135,8 +135,8 @@ python3 tools/check_frontend.py           # 화면 스크립트 문법(node 필�
 python3 tools/check_lock.py               # 잠금 파일 = requirements 범위
 .venv/bin/python -m pytest -q             # 테스트 DB(outofstock_test) 필요
 ```
-GitHub 에 올렸다면 Actions `ci` 의 lint · test(KST·UTC — 실제 복원 훈련 포함) · least-privilege · security · image 가 모두 초록인지
-(e2e — 실제 크로미움·axe — 는 수동·매주. 액션은 커밋 SHA 고정).
+GitHub 에 올렸다면 Actions `ci` 의 lint · test(KST·UTC — 실제 복원 훈련 포함) · least-privilege · security · image · e2e(실제 크로미움·axe)가 모두 초록인지
+(액션은 커밋 SHA 고정).
 
 ## 8. 화면 점검(스크린샷 기준 기능)
 | 화면 | 볼 것 |

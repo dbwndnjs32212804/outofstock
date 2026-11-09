@@ -60,7 +60,7 @@ tools/                 dr.py(백업·복구 훈련) · security_check.py(설정 
 docs/                  security/(수준진단 자가진단·자산·위험 등록부·제로트러스트·위협 모델·규정 대응·개발보안 69·내부 관리계획·검증 보고서) · adr/(0001~0028) · db/(DB 표준) · dr/ · perf/ · incidents/drills/
                        · data/(데이터 사전·계보 — 자동 생성) · models/ · incidents/ · verification.md · interview_qa.md
 tests/                 pytest 955개(배포 설정 정책 · 실제 복원 훈련 · 웹 화면 계약 · 수준진단 근거 무결성 · 배포 게이트·장애 판정·자가 점검 · DB 타입 정리·수명주기 · 모의투자 서버 권위·양봉이 추천 포함)
-.github/workflows/ci.yml  lint · test(KST·UTC) · least-privilege · security · image · e2e(수동·매주)
+.github/workflows/ci.yml  lint · test(KST·UTC) · least-privilege · security · image · e2e
 scheduler.py · run.py · Dockerfile · docker-compose(.prod).yml · requirements.txt(범위) · requirements.lock(해시 고정)
 ```
 
@@ -204,7 +204,7 @@ python run.py fetch-dart    # (선택) 부실예측 Altman Z'' 용 대차대조�
 - **least-privilege**: `roles.sql` 로 계정을 나눈 DB 에서 **앱 계정(oos_app)으로** 전체 시험 + `db_roles_check --strict`
 - **security**: pip-audit(잠금 파일) · bandit(app·tools) · 숨은 문자 · 운영 견본 보안 기준선 · SBOM(CycloneDX)
 - **image**: 운영 이미지 빌드 → 읽기 전용·capability 0·권한 상승 금지로 띄워 `/health` · compose 운영 오버레이 설정 검증
-- **e2e**(수동·매주): 실제 크로미움 — 쿠키 세션·CSRF·갱신·추가 인증·SSE·CSP/Trusted Types·접근성(axe)
+- **e2e**: 실제 크로미움 — 쿠키 세션·CSRF·갱신·추가 인증·SSE·CSP/Trusted Types·접근성(axe)
 
 ## 확장 포인트 (TODO)
 - 키 보관을 KMS/HSM 으로(지금은 .env 600) · 일반 사용자 2단계 인증 기본화(FIDO2/패스키)
